@@ -1,12 +1,14 @@
 from django.core.mail import send_mail
 from django.conf import settings
 import random
-from account.models import User
+from account.models import User, OTP
 
 
 def send_otp(email, request):
     otp = random.randint(1000,9999)
-    print('email is here', email)
+    OTP.objects.create(user=request.user, otp=otp)
+    otp = OTP.objects.last()
+    otp = otp.otp
     request.user.otp = otp
     request.user.save()
     subject = 'Sita Sweet Home Production'
