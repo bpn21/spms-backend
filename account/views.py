@@ -142,7 +142,6 @@ class VerifyOtpView(APIView):
         email = request.user.email
         otp = request.data['otp']
         current_time = datetime.now()
-        print(current_time, 'current time')
         #2023-12-16 17:12:34.445411 current time<<<<<<<<<<<<<
         # 2023-12-16 16:53:47.880 +0545 created time >>>>>> As there is "+0545". This is timezone-aware datetime object
         # In absence of "+0545". we need to make aware about timezone ,
@@ -164,7 +163,6 @@ class VerifyOtpView(APIView):
         otp_created_at = last_otp.created_at
         time_difference = current_time - otp_created_at
 
-        print(time_difference.total_seconds()/60,'time difference????')
         if time_difference < timedelta(minutes=5):
             if int(last_otp.otp) == int(otp):
                 request.user.is_varified = True
