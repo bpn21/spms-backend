@@ -7,7 +7,7 @@ from account.models import User, OTP
 def send_otp(email, request):
     otp = random.randint(1000,9999)
     OTP.objects.create(user=request.user, otp=otp)
-    otp = OTP.objects.last()
+    otp = OTP.objects.filter(user=request.user).last()
     otp = otp.otp
     request.user.otp = otp
     request.user.save()
