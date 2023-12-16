@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
+from django.conf import settings
 
 # THINGS TO UNDERSTAND !!!
 # Django implicitly creates the objects attribute as an instance of Manager. 
@@ -48,6 +49,12 @@ class UserManager(BaseUserManager):
         user.is_admin = True
         user.save(using=self._db)
         return user
+
+
+class OTP(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.DO_NOTHING, related_name='user_otps')
+    otp = models.IntegerField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null = True, blank = True)
 
 
 class User(AbstractBaseUser):
