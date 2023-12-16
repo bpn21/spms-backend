@@ -62,7 +62,9 @@ class UserRegistationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         # validated_data.pop('password2', None)
+        # the order of fields in the fields attribute of your serializer should match the order of parameters in the create_user method.
         user = User.objects.create_user(**validated_data)
+        # it unpacks the values from the dictionary as keyword arguments to the function. 
         return user
 
         """**validate_data is used to unpack a dictionary of validated data into keyword arguments for a function call. """
