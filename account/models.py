@@ -1,11 +1,22 @@
 from django.db import models
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 
+# THINGS TO UNDERSTAND !!!
+# Django implicitly creates the objects attribute as an instance of Manager. 
+# Behind the scenes, it's equivalent to:from django.db import models
+
+# class Manager(models.Manager):
+#     pass
+
+# class MyModel(models.Model):
+#     name = models.CharField(max_length=100)
+
+#     objects = Manager()
+
 # We will use AbstractBaseUser to make our own model.
 # We will use BaseUserManager to make user manager.
 
 # Custom User Manager
-
 
 class UserManager(BaseUserManager):
     def create_user(self, email, name, password=None, password2=None):
@@ -46,8 +57,11 @@ class User(AbstractBaseUser):
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     created_at = models.DateField(auto_now_add=True)
+    is_varified = models.BooleanField(default = False)
+    otp = models.IntegerField(null=True)
     updated_at = models.DateField(auto_now=True)
 
+    # this manager will be used to create, retrieve, update, and delete instances of the model.
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
@@ -55,6 +69,7 @@ class User(AbstractBaseUser):
 
     # If we dont write this, we will see object(1) object(2) object(3) and so on.
     def __str__(self):
+        # __str__ is a special method that is supposed to return a string representation of and object.
         # return '{}'.format(self.email)
         return self.email
 
@@ -72,3 +87,5 @@ class User(AbstractBaseUser):
     def is_staff(self):
         "Is the user the member of staff?"
         return self.is_admin
+
+

@@ -31,6 +31,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -205,6 +206,14 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'uploads')
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_HOST_USER = 'babalinvoice@gmail.com'
+EMAIL_HOST_PASSWORD = 'cfda jcmn tkjo kegm'
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+
 
 # At top its main domain, sub domain are listed below main domain.
 CORS_ALLOWED_ORIGINS = [

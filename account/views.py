@@ -2,11 +2,13 @@
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
-from account.serializers import UserRegistationSerializer, UserLoginSerializer, UserProfileViewSerializer, UserChangePasswordViewSerializer, SendResetPasswordEmailViewSerializer
 from django.contrib.auth import authenticate
 from account.renderers import UserRenderer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
+from account.email import send_otp
+from account.serializers import UserRegistationSerializer, UserLoginSerializer, UserProfileViewSerializer, UserChangePasswordViewSerializer, SendResetPasswordEmailViewSerializer
+from account.models import User
 
 
 def get_tokens_for_user(user):
@@ -121,3 +123,24 @@ class UserPasswordResetView(APIView):
             return Response({'msg': "Password reset successfully"})
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SendOtpView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        email = request.user.email
+        send_otp(email, request)
+        return Response({"message": f'Otp has been successfully send to {email}'},status=status.HTTP_200_OK)
+        
+
+class VerifyOtpView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        email = request.user.email
+        otp = request.data['otp']
+        if request.user.otp == int(otp):
+            request.user.is_varified = True
+            request.user.save()
+            return Response({"message": 'Email has been verified'},status=status.HTTP_200_OK)
+        else:
+            return Response({"message":"OTP did not match."})
