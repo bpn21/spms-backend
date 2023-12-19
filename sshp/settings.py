@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-fpp5=1w#wjbc@ebm1p)7bxcuxeh#j&wk^7lw^*fckblqn(1c46
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['127.0.0.1']
 
 
 REST_FRAMEWORK = {
@@ -152,7 +152,8 @@ DATABASES = {
         'NAME': 'sshp',
         'USER': 'postgres',
         'PASSWORD': 'macbookair',
-        'HOST': '127.0.0.1',
+        # 'HOST': '127.0.0.1',
+        'HOST': 'sshp_db',
         'PORT': '5432',
     }
 }

@@ -1,0 +1,64 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+./**/__pycache__
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Django stuff:
+*.log
+*.err
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+setenv.bat
+
+# Editors
+.vscode/
+.idea/
+
+# Redis scratchpad
+src/dump.rdb
+
+#Configs
+src/shared_data
+src/media/*.jpg
+src/media/*.png
+src/media/*.gif
+src/*.json
+src/*.ini
+# MacOS Stuff
+.DS_Store
+
+# css/js
+src/templates/admin/docs/css/
+src/templates/admin/docs/img/
+src/templates/admin/docs/js/
