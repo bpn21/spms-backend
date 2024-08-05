@@ -1,9 +1,12 @@
 from django.db import models
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
+
 
 # THINGS TO UNDERSTAND !!!
-# Django implicitly creates the objects attribute as an instance of Manager. 
+# Django implicitly creates the objects attribute as an instance of Manager.
 # Behind the scenes, it's equivalent to:from django.db import models
 
 # class Manager(models.Manager):
@@ -19,12 +22,13 @@ from django.conf import settings
 
 # Custom User Manager
 
+
 class UserManager(BaseUserManager):
     def create_user(self, email, name, password=None, password2=None):
         """Creates and saves the NORMAL user with the given email, name and password"""
 
         if not email:
-            raise ValueError('User must have an email address')
+            raise ValueError("User must have an email address")
 
         """Not nessary for name to normalize"""
         user = self.model(
@@ -39,7 +43,7 @@ class UserManager(BaseUserManager):
     # To use this method. i.e custome super user we have to add AUTH_USER_MODEL = 'accounts.User
     def create_superuser(self, email, name, password=None):
         if not email:
-            raise ValidationError('User must have email address')
+            raise ValidationError("User must have email address")
         user = self.create_user(
             email=self.normalize_email(email),
             password=password,
@@ -52,27 +56,28 @@ class UserManager(BaseUserManager):
 
 
 class OTP(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.DO_NOTHING, related_name='user_otps')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.DO_NOTHING, related_name="user_otps"
+    )
     otp = models.IntegerField(null=True)
-    created_at = models.DateTimeField(auto_now_add=True, null = True, blank = True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
 
 class User(AbstractBaseUser):
-    email = models.EmailField(
-        max_length=255, verbose_name='email', unique=True)
+    email = models.EmailField(max_length=255, verbose_name="email", unique=True)
     name = models.CharField(max_length=200)
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     created_at = models.DateField(auto_now_add=True)
-    is_varified = models.BooleanField(default = False)
+    is_varified = models.BooleanField(default=False)
     otp = models.IntegerField(null=True)
     updated_at = models.DateField(auto_now=True)
 
     # this manager will be used to create, retrieve, update, and delete instances of the model.
     objects = UserManager()
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['name']
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["name"]
 
     # If we dont write this, we will see object(1) object(2) object(3) and so on.
     def __str__(self):
@@ -96,3 +101,28 @@ class User(AbstractBaseUser):
         return self.is_admin
 
 
+class UserToken(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="tokens"
+    )
+    token = models.CharField(max_length=255)
+    device_info = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.device_info}"
+
+    def is_expired(self):
+        expiration_time = self.created_at + timedelta(
+            hours=1
+        )  # Adjust timedelta as needed
+        return timezone.now() > expiration_time
+
+
+class BlacklistedToken(models.Model):
+    token = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.token
