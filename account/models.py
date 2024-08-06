@@ -107,6 +107,7 @@ class UserToken(models.Model):
     )
     token = models.CharField(max_length=255)
     device_info = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    expiry_time = models.DateTimeField(null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

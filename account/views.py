@@ -6,6 +6,9 @@ from django.contrib.auth import authenticate
 from account.renderers import UserRenderer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
+import jwt
+from django.conf import settings
 from account.email import send_otp
 from .utils import blacklist_token
 
@@ -21,9 +24,7 @@ from account.models import User, OTP, UserToken
 from django.utils import timezone
 
 
-def get_tokens_for_user(user):
-    refresh = RefreshToken.for_user(user)
-
+def get_tokens_for_user(refresh):
     return {
         "refresh": str(refresh),
         "access": str(refresh.access_token),
@@ -67,53 +68,52 @@ class UserLoginView(APIView):
     def post(self, request, format=None):
         serializer = UserLoginSerializer(data=request.data)
         if serializer.is_valid(raise_exception=True):
-            email = serializer.data.get("email")
-            password = serializer.data.get("password")
+            email = serializer.validated_data.get("email")
+            password = serializer.validated_data.get("password")
             user = authenticate(email=email, password=password)
 
             if user is not None:
-                # Clean up expired tokens
-                expiration_time = timezone.now() - timedelta(
-                    days=7
-                )  # Adjust expiration time as needed
                 tokens = UserToken.objects.filter(user=user)
 
                 # Delete expired tokens
                 for token in tokens:
-                    if token.created_at < expiration_time:
+                    if timezone.now() > token.expiry_time:
                         token.delete()
-
-                # Check the number of active tokens
                 active_tokens_count = UserToken.objects.filter(user=user).count()
-                token = get_tokens_for_user(user)
 
+                refresh = RefreshToken.for_user(user)
                 if active_tokens_count >= 1:
-                    return Response(
+                    send_otp(email, user)
+                    raise ValidationError(
                         {
-                            "message": "Device Limit Exceeded",
+                            "message": f"Otp has been successfully send to {email}",
                             "status": status.HTTP_403_FORBIDDEN,
-                            "token": token,
+                            "token": {
+                                "refresh": str(refresh),
+                                "access": str(refresh.access_token),
+                            },
                         },
-                        status=status.HTTP_403_FORBIDDEN,
                     )
 
-                # Generate a new token and save it
-                # UserToken.objects.update_or_create(
-                #     user=user,
-                #     defaults={
-                #         "token": token["access"],
-                #         "device_info": request.META.get("HTTP_USER_AGENT", ""),
-                #     },
-                # )
-                UserToken.objects.create(
-                    user=user,
-                    token=token["access"],
-                    device_info=request.META.get("HTTP_USER_AGENT", ""),
+                decoded_token = jwt.decode(
+                    str(refresh.access_token), settings.SECRET_KEY, algorithms=["HS256"]
+                )
+                expiry_time = datetime.fromtimestamp(
+                    decoded_token.get("exp"), timezone.utc
                 )
 
+                UserToken.objects.create(
+                    user=user,
+                    token=str(refresh.access_token),
+                    device_info=request.META.get("HTTP_USER_AGENT", ""),
+                    expiry_time=expiry_time,
+                )
                 return Response(
                     {
-                        "token": token,
+                        "token": {
+                            "refresh": str(refresh),
+                            "access": str(refresh.access_token),
+                        },
                         "msg": "Login Successful",
                         "status": status.HTTP_200_OK,
                     },
@@ -123,7 +123,7 @@ class UserLoginView(APIView):
                 return Response(
                     {
                         "error": {
-                            "non_fields_errors": ["Email or Password is not Valid"]
+                            "non_field_errors": ["Email or Password is not Valid"]
                         },
                         "status": status.HTTP_404_NOT_FOUND,
                     },
@@ -243,14 +243,16 @@ class VerifyOtpView(APIView):
 class UserLogoutView(APIView):
     def post(self, request):
         user = request.user
-        auth_header = request.META.get("HTTP_AUTHORIZATION", None)
-        if auth_header:
-            token = auth_header.split(" ")[1]  # Assuming 'Bearer <token>'
-            # Blacklist the token
-            blacklist_token(token)
+        if not request.user.is_authenticated:
+            return Response(
+                {"message": "User is not authenticated."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
-        # Optionally, you might want to remove the token from the database
-        UserToken.objects.filter(user=user).first()
+        user_token = UserToken.objects.filter(user=user).first()
+        print(user_token, "TOKEN IS HERE")
+        if user_token:
+            user_token.delete()
 
         return Response(
             {"msg": "Logout Successful", "status": status.HTTP_200_OK},
