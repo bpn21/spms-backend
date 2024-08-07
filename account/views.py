@@ -88,10 +88,7 @@ class UserLoginView(APIView):
                         {
                             "message": f"Otp has been successfully send to {email}",
                             "status": status.HTTP_403_FORBIDDEN,
-                            "token": {
-                                "refresh": str(refresh),
-                                "access": str(refresh.access_token),
-                            },
+                            "id": user.id,
                         },
                     )
 
@@ -204,8 +201,8 @@ class VerifyOtpView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        email = request.user.email
-        otp = request.data["otp"]
+        otp = request.data["opt"]
+        user_id = request.data["user_id"]
         current_time = datetime.now()
         # 2023-12-16 17:12:34.445411 current time<<<<<<<<<<<<<
         # 2023-12-16 16:53:47.880 +0545 created time >>>>>> As there is "+0545". This is timezone-aware datetime object
@@ -221,18 +218,20 @@ class VerifyOtpView(APIView):
         # current_time = current_time.astimezone(timezone.get_current_timezone())
         # OR
         current_time = timezone.make_aware(current_time)
-
-        user_otp = OTP.objects.filter(user_id=request.user.id)
+        user = User.objects.get(id=user_id)
+        user_otp = OTP.objects.filter(user_id=user_id)
         last_otp = user_otp.last()
         otp_created_at = last_otp.created_at
         time_difference = current_time - otp_created_at
+        refresh = RefreshToken.for_user(user)
 
         if time_difference < timedelta(minutes=5):
             if int(last_otp.otp) == int(otp):
                 request.user.is_varified = True
                 request.user.save()
                 return Response(
-                    {"message": "Email has been verified"}, status=status.HTTP_200_OK
+                    {"message": "Email has been verified", "token": refresh},
+                    status=status.HTTP_200_OK,
                 )
             else:
                 return Response({"message": "OTP did not match."})
