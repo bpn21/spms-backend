@@ -7,6 +7,7 @@ from account.renderers import UserRenderer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny
 import jwt
 from django.conf import settings
 from account.email import send_otp
@@ -198,12 +199,15 @@ class SendOtpView(APIView):
 
 
 class VerifyOtpView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        otp = request.data["opt"]
-        user_id = request.data["user_id"]
-        current_time = datetime.now()
+        data = request.data.get("otp")
+        otp = data.get("otp")
+        user_id = data.get("id")
+        print(data, "OTP<<//")
+        print(otp, "OTP<<//")
+        print(user_id, "OTP<<//")
         # 2023-12-16 17:12:34.445411 current time<<<<<<<<<<<<<
         # 2023-12-16 16:53:47.880 +0545 created time >>>>>> As there is "+0545". This is timezone-aware datetime object
         # In absence of "+0545". we need to make aware about timezone ,
@@ -217,20 +221,44 @@ class VerifyOtpView(APIView):
         # USE ANY ONE
         # current_time = current_time.astimezone(timezone.get_current_timezone())
         # OR
-        current_time = timezone.make_aware(current_time)
-        user = User.objects.get(id=user_id)
+        current_time = timezone.now()
+        print(type(user_id), "....")
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
         user_otp = OTP.objects.filter(user_id=user_id)
         last_otp = user_otp.last()
         otp_created_at = last_otp.created_at
         time_difference = current_time - otp_created_at
+        print(time_difference, "time difference")
         refresh = RefreshToken.for_user(user)
 
-        if time_difference < timedelta(minutes=5):
+        if time_difference < timedelta(minutes=30):
             if int(last_otp.otp) == int(otp):
-                request.user.is_varified = True
-                request.user.save()
+                user.is_varified = True
+                decoded_token = jwt.decode(
+                    str(refresh.access_token), settings.SECRET_KEY, algorithms=["HS256"]
+                )
+                expiry_time = datetime.fromtimestamp(
+                    decoded_token.get("exp"), timezone.utc
+                )
+
+                UserToken.objects.create(
+                    user=user,
+                    token=str(refresh.access_token),
+                    device_info=request.META.get("HTTP_USER_AGENT", ""),
+                    expiry_time=expiry_time,
+                )
+                user.save()
                 return Response(
-                    {"message": "Email has been verified", "token": refresh},
+                    {
+                        "message": "Email has been verified",
+                        "token": {
+                            "refresh": str(refresh),
+                            "access": str(refresh.access_token),
+                        },
+                    },
                     status=status.HTTP_200_OK,
                 )
             else:
