@@ -205,9 +205,6 @@ class VerifyOtpView(APIView):
         data = request.data.get("otp")
         otp = data.get("otp")
         user_id = data.get("id")
-        print(data, "OTP<<//")
-        print(otp, "OTP<<//")
-        print(user_id, "OTP<<//")
         # 2023-12-16 17:12:34.445411 current time<<<<<<<<<<<<<
         # 2023-12-16 16:53:47.880 +0545 created time >>>>>> As there is "+0545". This is timezone-aware datetime object
         # In absence of "+0545". we need to make aware about timezone ,
@@ -275,9 +272,12 @@ class UserLogoutView(APIView):
                 {"message": "User is not authenticated."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        refresh_token = request.data["refresh"]
+        token = RefreshToken(refresh_token)
+        # blacklist_token(token)
+        token.blacklist()
 
         user_token = UserToken.objects.filter(user=user).first()
-        print(user_token, "TOKEN IS HERE")
         if user_token:
             user_token.delete()
 
