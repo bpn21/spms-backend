@@ -7,11 +7,11 @@ version: '3.8'
 services:
   api:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: src
+      dockerfile: docker/local/Dockerfile
     #command: python manage.py runserver 0.0.0.0:8000
     volumes:
-       - ./:/app
+       - ./src/:/app
     ports:
       - 8000:8000
     depends_on:
@@ -21,6 +21,8 @@ services:
       - DJANGO_SETTINGS_MODULE=sshp.settings
     # networks:
     #   - mynetwork
+    env_file:
+      - .env 
     container_name: sshp_backend
 
   db:
