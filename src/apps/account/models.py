@@ -3,6 +3,8 @@ from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken
 
 
 # THINGS TO UNDERSTAND !!!
@@ -107,7 +109,7 @@ class UserToken(models.Model):
     )
     token = models.CharField(max_length=255)
     device_info = models.CharField(max_length=255, blank=True, null=True)
-    expiry_time = models.DateTimeField(null=True, blank=True, unique=True)l
+    expiry_time = models.DateTimeField(null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -122,7 +124,7 @@ class UserToken(models.Model):
 
 
 class BlacklistedToken(models.Model):
-    token = models.CharField(max_length=255, unique=True)
+    token = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
