@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.exceptions import TokenError
+from .exceptions import MultileDeviceLoggedIn
 import jwt
 from django.conf import settings
 from apps.account.email import send_otp
@@ -39,16 +40,12 @@ class UserRegistrationView(APIView):
     def post(self, request, format=None):
         serializer = UserRegistationSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()  # Save the new user
-            token = get_tokens_for_user(user)  # Generate tokens for the new user
-
-            # Create the initial token record
+            user = serializer.save()
+            token = get_tokens_for_user(user)
             UserToken.objects.create(
                 user=user,
-                token=token["access"],  # Store the access token
-                device_info=request.META.get(
-                    "HTTP_USER_AGENT", ""
-                ),  # Store device info if needed
+                token=token["access"],
+                device_info=request.META.get("HTTP_USER_AGENT", ""),
             )
 
             return Response(
@@ -60,12 +57,12 @@ class UserRegistrationView(APIView):
                 status=status.HTTP_201_CREATED,
             )
         else:
-            print(serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserLoginView(APIView):
     renderer_classes = [UserRenderer]
+    permission_classes = [AllowAny]
 
     def post(self, request, format=None):
         serializer = UserLoginSerializer(data=request.data)
@@ -77,41 +74,48 @@ class UserLoginView(APIView):
             if user is not None:
                 tokens = UserToken.objects.filter(user=user)
 
+                if tokens is None and tokens.expiry_time is None:
+                    return None
+
                 # Delete expired tokens
                 for token in tokens:
                     if timezone.now() > token.expiry_time:
                         token.delete()
-                active_tokens_count = UserToken.objects.filter(user=user).count()
 
                 refresh = RefreshToken.for_user(user)
-                if active_tokens_count >= 1:
-                    send_otp(email, user)
-                    raise ValidationError(
-                        {
-                            "message": f"Otp has been successfully send to {email}",
-                            "status": status.HTTP_403_FORBIDDEN,
-                            "id": user.id,
-                        },
-                    )
-
+                access_token = str(refresh.access_token)
                 decoded_token = jwt.decode(
-                    str(refresh.access_token), settings.SECRET_KEY, algorithms=["HS256"]
+                    str(access_token), settings.SECRET_KEY, algorithms=["HS256"]
                 )
                 expiry_time = datetime.fromtimestamp(
                     decoded_token.get("exp"), timezone.utc
                 )
-
                 UserToken.objects.create(
                     user=user,
-                    token=str(refresh.access_token),
+                    token=access_token,
                     device_info=request.META.get("HTTP_USER_AGENT", ""),
                     expiry_time=expiry_time,
                 )
+                active_tokens_count = UserToken.objects.filter(user=user).count()
+
+                if active_tokens_count > 1:
+                    oldest_token = (
+                        UserToken.objects.filter(user=user)
+                        .order_by("created_at")
+                        .first()
+                    )
+                    blacklist_token(oldest_token.token)
+                    raise MultileDeviceLoggedIn(
+                        f"Otp has been successfully send to {email}",
+                        send_otp(email, user),
+                        user.id,
+                    )
+
                 return Response(
                     {
                         "token": {
                             "refresh": str(refresh),
-                            "access": str(refresh.access_token),
+                            "access": access_token,
                         },
                         "msg": "Login Successful",
                         "status": status.HTTP_200_OK,
@@ -201,35 +205,32 @@ class VerifyOtpView(APIView):
         data = request.data.get("otp")
         otp = data.get("otp")
         user_id = data.get("id")
-        # 2023-12-16 17:12:34.445411 current time<<<<<<<<<<<<<
-        # 2023-12-16 16:53:47.880 +0545 created time >>>>>> As there is "+0545". This is timezone-aware datetime object
-        # In absence of "+0545". we need to make aware about timezone ,
-
-        # syntax: timezone.make_aware(date)
-        # 362.26969913333335 time difference.....
-        # why?
-        # To handle this situation correctly, you should ensure that both timestamps are in the same timezone before calculating the time difference. If your Django project is configured to use the 'Asia/Kathmandu' timezone, you can convert the current_time to this timezone:
-
-        # Convert current_time to the timezone used in your database (e.g., 'Asia/Kathmandu')
-        # USE ANY ONE
-        # current_time = current_time.astimezone(timezone.get_current_timezone())
-        # OR
         current_time = timezone.now()
-        print(type(user_id), "....")
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=404)
-        user_otp = OTP.objects.filter(user_id=user_id)
+        user_otp = OTP.objects.filter(user_id=user_id).order_by("created_at")
         last_otp = user_otp.last()
         otp_created_at = last_otp.created_at
         time_difference = current_time - otp_created_at
-        print(time_difference, "time difference")
-        refresh = RefreshToken.for_user(user)
 
         if time_difference < timedelta(minutes=30):
             if int(last_otp.otp) == int(otp):
                 user.is_varified = True
+
+                active_tokens_count = UserToken.objects.filter(user=user).count()
+
+                if active_tokens_count > 1:
+                    oldest_token = (
+                        UserToken.objects.filter(user=user)
+                        .order_by("created_at")
+                        .first()
+                    )
+                    blacklist_token(oldest_token.token)  # Blacklist the oldest token
+                    oldest_token.delete()
+
+                refresh = RefreshToken.for_user(user)
                 decoded_token = jwt.decode(
                     str(refresh.access_token), settings.SECRET_KEY, algorithms=["HS256"]
                 )
@@ -244,9 +245,10 @@ class VerifyOtpView(APIView):
                     expiry_time=expiry_time,
                 )
                 user.save()
+
                 return Response(
                     {
-                        "message": "Email has been verified",
+                        "message": "OTP verified successfully.",
                         "token": {
                             "refresh": str(refresh),
                             "access": str(refresh.access_token),
@@ -255,9 +257,13 @@ class VerifyOtpView(APIView):
                     status=status.HTTP_200_OK,
                 )
             else:
-                return Response({"message": "OTP did not match."})
+                return Response(
+                    {"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST
+                )
         else:
-            return Response({"message": "OTP has been expired."})
+            return Response(
+                {"error": "OTP expired"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class UserLogoutView(APIView):
