@@ -4,7 +4,6 @@ import os
 from .settings import *
 
 DEBUG = os.environ.get("DEBUG", default=1)
-print(DEBUG, "DEBUG is here")
 
 
 DATABASES = {
@@ -17,6 +16,7 @@ DATABASES = {
         "PORT": os.environ.get("SQL_PORT"),
     },
 }
+
 
 # CELERY_BEAT_SCHEDULE = {
 #     "vegitables-daily-price": {

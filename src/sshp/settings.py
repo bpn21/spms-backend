@@ -41,7 +41,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.account.authenticate.CustomJWTAuthentication",
         "rest_framework.authentication.TokenAuthentication",
     ],
     #     'DEFAULT_PERMISSION_CLASSES': [
@@ -50,14 +50,15 @@ REST_FRAMEWORK = {
     # ],
 }
 # AUTH_USER_MODEL = 'users.User'
-# MAJOR ATTENTION HERE: THIS AUTH_USER_MODEL must be written before migations otherwise this gives error called foreign key constrain.
+# MAJOR ATTENTION HERE: THIS AUTH_USER_MODEL must be written before migationCORS_ALLOWED_HEADERSs otherwise this gives error called foreign key constrain.
 AUTH_USER_MODEL = "account.User"
+
 
 SIMPLE_JWT = {
     # "ACCESS_TOKEN_LIFETIME": timedelta(minutes=20),
     # "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1),
-    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
@@ -280,3 +281,8 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 #         },
 #     },
 # }
+
+# CORS_ALLOW_HEADERS = [
+#     "X-Refresh-Token",
+# ]
+# CORS_ALLOW_CREDENTIALS = True
