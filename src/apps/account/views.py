@@ -1,4 +1,5 @@
 # Create your views here.
+import os
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
@@ -14,7 +15,6 @@ import jwt
 from django.conf import settings
 from apps.account.email import send_otp
 from .utils import blacklist_token
-
 from datetime import datetime, timedelta
 from apps.account.serializers import (
     UserRegistationSerializer,
@@ -39,13 +39,16 @@ class UserRegistrationView(APIView):
 
     def post(self, request, format=None):
         serializer = UserRegistationSerializer(data=request.data)
+        device_info = request.META.get("HTTP_USER_AGENT", "") + request.data.get(
+            "screen_size"
+        )
         if serializer.is_valid():
             user = serializer.save()
             token = get_tokens_for_user(user)
             UserToken.objects.create(
                 user=user,
                 token=token["access"],
-                device_info=request.META.get("HTTP_USER_AGENT", ""),
+                device_info=device_info,
             )
 
             return Response(
@@ -77,7 +80,6 @@ class UserLoginView(APIView):
                 if tokens is None and tokens.expiry_time is None:
                     return None
 
-                # Delete expired tokens
                 for token in tokens:
                     if timezone.now() > token.expiry_time:
                         token.delete()
@@ -90,38 +92,61 @@ class UserLoginView(APIView):
                 expiry_time = datetime.fromtimestamp(
                     decoded_token.get("exp"), timezone.utc
                 )
-                UserToken.objects.create(
-                    user=user,
-                    token=access_token,
-                    device_info=request.META.get("HTTP_USER_AGENT", ""),
-                    expiry_time=expiry_time,
+                device_info = request.META.get("HTTP_USER_AGENT", "") + str(
+                    request.data.get("screen_size")
                 )
-                active_tokens_count = UserToken.objects.filter(user=user).count()
+                userDevice = UserToken.objects.filter(
+                    user=user, device_info=device_info
+                )
 
-                if active_tokens_count > 1:
-                    oldest_token = (
-                        UserToken.objects.filter(user=user)
-                        .order_by("created_at")
-                        .first()
-                    )
-                    blacklist_token(oldest_token.token)
-                    raise MultileDeviceLoggedIn(
-                        f"Otp has been successfully send to {email}",
-                        send_otp(email, user),
-                        user.id,
-                    )
-
-                return Response(
-                    {
-                        "token": {
-                            "refresh": str(refresh),
-                            "access": access_token,
+                if userDevice.exists():
+                    return Response(
+                        {
+                            "token": {
+                                "refresh": str(refresh),
+                                "access": access_token,
+                            },
+                            "msg": "Login Successful",
+                            "status": status.HTTP_200_OK,
                         },
-                        "msg": "Login Successful",
-                        "status": status.HTTP_200_OK,
-                    },
-                    status=status.HTTP_200_OK,
-                )
+                        status=status.HTTP_200_OK,
+                    )
+                else:
+                    UserToken.objects.create(
+                        user=user,
+                        token=access_token,
+                        device_info=device_info + str(request.data.get("screen_size")),
+                        expiry_time=expiry_time,
+                    )
+                    active_tokens_count = UserToken.objects.filter(user=user).count()
+
+                    if active_tokens_count > 1:
+                        oldest_token = (
+                            UserToken.objects.filter(user=user)
+                            .order_by("created_at")
+                            .first()
+                        )
+                        blacklist_token(oldest_token.token)
+                        raise MultileDeviceLoggedIn(
+                            f"Otp has been successfully send to {email}",
+                            send_otp(email, user)
+                            if os.environ.get("DEBUG")
+                            else "****",
+                            user.id,
+                        )
+
+                    return Response(
+                        {
+                            "token": {
+                                "refresh": str(refresh),
+                                "access": access_token,
+                            },
+                            "msg": "Login Successful, New Device Detected !",
+                            "status": status.HTTP_200_OK,
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+
             else:
                 return Response(
                     {
@@ -214,6 +239,9 @@ class VerifyOtpView(APIView):
         last_otp = user_otp.last()
         otp_created_at = last_otp.created_at
         time_difference = current_time - otp_created_at
+        device_info = request.META.get("HTTP_USER_AGENT", "") + str(
+            request.data.get("screen_size")
+        )
 
         if time_difference < timedelta(minutes=30):
             if int(last_otp.otp) == int(otp):
@@ -241,7 +269,7 @@ class VerifyOtpView(APIView):
                 UserToken.objects.create(
                     user=user,
                     token=str(refresh.access_token),
-                    device_info=request.META.get("HTTP_USER_AGENT", ""),
+                    device_info=device_info,
                     expiry_time=expiry_time,
                 )
                 user.save()

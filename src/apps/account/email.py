@@ -2,6 +2,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 import random
 from apps.account.models import User, OTP
+import os
 
 
 def send_otp(email, user):
@@ -11,6 +12,8 @@ def send_otp(email, user):
     otp = otp.otp
     user.otp = otp
     user.save()
+    if os.environ.get("DEBUG"):
+        return otp
     subject = "Sita Sweet Home Production"
     message = f"Your otp is {otp}. Do not share this otp with anyone1. \n Kinds regards\n Sita Sweet Home Production.\n"
     send_mail(subject, message, settings.EMAIL_HOST_USER, [email])
