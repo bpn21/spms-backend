@@ -16,6 +16,13 @@ from django.conf import settings
 from apps.account.email import send_otp
 from .utils import blacklist_token
 from datetime import datetime, timedelta
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework_simplejwt.views import TokenRefreshView
+
 from apps.account.serializers import (
     UserRegistationSerializer,
     UserLoginSerializer,
@@ -23,7 +30,7 @@ from apps.account.serializers import (
     UserChangePasswordViewSerializer,
     SendResetPasswordEmailViewSerializer,
 )
-from apps.account.models import User, OTP, UserToken
+from apps.account.models import User, OTP, UserToken, BlacklistedToken
 from django.utils import timezone
 
 
@@ -115,6 +122,8 @@ class UserLoginView(APIView):
                     UserToken.objects.create(
                         user=user,
                         token=access_token,
+                        access_token=access_token,
+                        refresh_token=refresh,
                         device_info=device_info + str(request.data.get("screen_size")),
                         expiry_time=expiry_time,
                     )
@@ -305,9 +314,10 @@ class UserLogoutView(APIView):
 
         token = auth_header.split()[1]
         user = request.user
-        user_token = UserToken.objects.filter(user=user).first()
-        if user_token:
-            user_token.delete()
+        refresh_token = UserToken.objects.get(refresh_token=request.data.get("refresh"))
+        if refresh_token:
+            BlacklistedToken.objects.create(token=refresh_token)
+            refresh_token.delete()
 
         if not user.is_authenticated:
             return Response(
@@ -341,3 +351,42 @@ class UserLogoutView(APIView):
             {"message": "User logged out successfully."},
             status=status.HTTP_204_NO_CONTENT,
         )
+
+
+class CustomRefreshTokenView(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        refresh_token = request.data.get("refresh", None)
+
+        # Check if the refresh token is present
+        if not refresh_token:
+            return Response(
+                {"error": "Refresh token is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # Validate the token
+            refresh = RefreshToken(refresh_token)
+
+            # Blacklist the old token (if required)
+            try:
+                BlacklistedToken.objects.get(token=refresh)
+                return Response(
+                    {"error": "Token already blacklisted"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except BlacklistedToken.DoesNotExist:
+                # Blacklist old refresh token
+                BlacklistedToken.objects.create(token=refresh)
+
+            # Proceed to refresh token as usual
+            data = super().post(request, *args, **kwargs).data
+            return Response(data, status=status.HTTP_200_OK)
+
+        except TokenError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {"error": "Unexpected error occurred"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

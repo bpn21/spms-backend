@@ -9,11 +9,13 @@ from apps.account.views import (
     VerifyOtpView,
     SendOtpView,
     UserLogoutView,
+    CustomRefreshTokenView,
 )
 
 urlpatterns = [
     path("register/", UserRegistrationView.as_view()),
     path("login/", UserLoginView.as_view()),
+    path("refresh/", CustomRefreshTokenView.as_view()),
     path("logout/", UserLogoutView.as_view()),
     path("send-otp/", SendOtpView.as_view()),
     path("verify-otp/", VerifyOtpView.as_view()),

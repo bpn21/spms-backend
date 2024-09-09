@@ -108,8 +108,11 @@ class UserToken(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="tokens"
     )
     token = models.CharField(max_length=255)
+    access_token = models.CharField(max_length=255, null=True, blank=True)
+    refresh_token = models.CharField(max_length=255, null=True, blank=True)
     device_info = models.CharField(max_length=255, blank=True, null=True)
     expiry_time = models.DateTimeField(null=True, blank=True, unique=True)
+    is_valid = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
