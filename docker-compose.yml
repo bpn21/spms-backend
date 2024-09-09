@@ -18,11 +18,11 @@ services:
       - db
     environment:
       - TZ=Asia/Kathmandu
-      - DJANGO_SETTINGS_MODULE=sshp.settings
+      # - DJANGO_SETTINGS_MODULE=sshp.settings
     # networks:
     #   - mynetwork
     env_file:
-      - .env 
+      - ./src/sshp/.env 
     container_name: sshp_backend
 
   db:
