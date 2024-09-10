@@ -137,7 +137,7 @@ class UserLoginView(APIView):
                         )
                         blacklist_token(oldest_token.token)
                         raise MultileDeviceLoggedIn(
-                            f"Otp has been successfully send to {email}",
+                            f"Device Limit exceeded, Otp has been successfully send to {email}",
                             send_otp(email, user)
                             if os.environ.get("DEBUG")
                             else "****",
@@ -284,7 +284,7 @@ class VerifyOtpView(APIView):
 
                 return Response(
                     {
-                        "message": "OTP verified successfully.",
+                        "message": "OTP verified",
                         "token": {
                             "refresh": str(refresh),
                             "access": str(refresh.access_token),
