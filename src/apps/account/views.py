@@ -236,9 +236,8 @@ class VerifyOtpView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        data = request.data.get("otp")
-        otp = data.get("otp")
-        user_id = data.get("id")
+        otp = request.data.get("otp")
+        user_id = request.data.get("id")
         current_time = timezone.now()
         try:
             user = User.objects.get(id=user_id)
