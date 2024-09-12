@@ -46,8 +46,8 @@ class UserRegistrationView(APIView):
 
     def post(self, request, format=None):
         serializer = UserRegistationSerializer(data=request.data)
-        device_info = request.META.get("HTTP_USER_AGENT", "") + request.data.get(
-            "screen_size"
+        device_info = request.META.get("HTTP_USER_AGENT", "") + str(
+            request.data.get("screen_size")
         )
         if serializer.is_valid():
             user = serializer.save()
@@ -76,96 +76,84 @@ class UserLoginView(APIView):
 
     def post(self, request, format=None):
         serializer = UserLoginSerializer(data=request.data)
-        if serializer.is_valid(raise_exception=True):
-            email = serializer.validated_data.get("email")
-            password = serializer.validated_data.get("password")
-            user = authenticate(email=email, password=password)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data.get("email")
+        password = serializer.validated_data.get("password")
+        user = authenticate(email=email, password=password)
 
-            if user is not None:
-                tokens = UserToken.objects.filter(user=user)
+        if user is not None:
+            tokens = UserToken.objects.filter(user=user)
 
-                if tokens is None and tokens.expiry_time is None:
-                    return None
+            if tokens is None and tokens.expiry_time is None:
+                return None
 
-                for token in tokens:
-                    if timezone.now() > token.expiry_time:
-                        token.delete()
+            for token in tokens:
+                if timezone.now() > token.expiry_time:
+                    token.delete()
 
-                refresh = RefreshToken.for_user(user)
-                access_token = str(refresh.access_token)
-                decoded_token = jwt.decode(
-                    str(access_token), settings.SECRET_KEY, algorithms=["HS256"]
-                )
-                expiry_time = datetime.fromtimestamp(
-                    decoded_token.get("exp"), timezone.utc
-                )
-                device_info = request.META.get("HTTP_USER_AGENT", "") + str(
-                    request.data.get("screen_size")
-                )
-                userDevice = UserToken.objects.filter(
-                    user=user, device_info=device_info
-                )
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            refresh = str(refresh)
 
-                if userDevice.exists():
-                    return Response(
-                        {
-                            "token": {
-                                "refresh": str(refresh),
-                                "access": access_token,
-                            },
-                            "msg": "Login Successful",
-                            "status": status.HTTP_200_OK,
+            decoded_token = jwt.decode(
+                (access_token), settings.SECRET_KEY, algorithms=["HS256"]
+            )
+            expiry_time = datetime.fromtimestamp(decoded_token.get("exp"), timezone.utc)
+            device_info = str(
+                request.META.get("HTTP_USER_AGENT", "")
+                + str(request.data.get("screen_size"))
+            )
+            userDevice = UserToken.objects.filter(user=user, device_info=device_info)
+            if userDevice.exists():
+                return Response(
+                    {
+                        "token": {
+                            "refresh": refresh,
+                            "access": access_token,
                         },
-                        status=status.HTTP_200_OK,
+                        "msg": "Login Successful",
+                        "status": status.HTTP_200_OK,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                active_tokens_count = UserToken.objects.filter(user=user).count()
+
+                if active_tokens_count >= 1:
+                    raise MultileDeviceLoggedIn(
+                        f"Device Limit exceeded, Otp has been successfully send to {email}",
+                        send_otp(email, user) if os.environ.get("DEBUG") else "****",
+                        user.id,
                     )
                 else:
                     UserToken.objects.create(
                         user=user,
-                        token=access_token,
-                        access_token=access_token,
-                        refresh_token=refresh,
-                        device_info=device_info + str(request.data.get("screen_size")),
+                        token=(access_token),
+                        access_token=(access_token),
+                        refresh_token=(refresh),
+                        device_info=device_info,
                         expiry_time=expiry_time,
                     )
-                    active_tokens_count = UserToken.objects.filter(user=user).count()
-
-                    if active_tokens_count > 1:
-                        oldest_token = (
-                            UserToken.objects.filter(user=user)
-                            .order_by("created_at")
-                            .first()
-                        )
-                        blacklist_token(oldest_token.token)
-                        raise MultileDeviceLoggedIn(
-                            f"Device Limit exceeded, Otp has been successfully send to {email}",
-                            send_otp(email, user)
-                            if os.environ.get("DEBUG")
-                            else "****",
-                            user.id,
-                        )
-
-                    return Response(
-                        {
-                            "token": {
-                                "refresh": str(refresh),
-                                "access": access_token,
-                            },
-                            "msg": "Login Successful, New Device Detected !",
-                            "status": status.HTTP_200_OK,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-
-            else:
                 return Response(
                     {
-                        "error": {
-                            "non_field_errors": ["Email or Password is not Valid"]
+                        "token": {
+                            "refresh": (refresh),
+                            "access": access_token,
                         },
-                        "status": status.HTTP_404_NOT_FOUND,
+                        "msg": "Login Successful, New Device Detected !",
+                        "status": status.HTTP_200_OK,
                     },
-                    status=status.HTTP_404_NOT_FOUND,
+                    status=status.HTTP_200_OK,
                 )
+
+        else:
+            return Response(
+                {
+                    "error": {"non_field_errors": ["Email or Password is not Valid"]},
+                    "status": status.HTTP_404_NOT_FOUND,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
 
 class UserProfileView(APIView):
@@ -257,18 +245,18 @@ class VerifyOtpView(APIView):
 
                 active_tokens_count = UserToken.objects.filter(user=user).count()
 
-                if active_tokens_count > 1:
+                if active_tokens_count >= 1:
                     oldest_token = (
                         UserToken.objects.filter(user=user)
                         .order_by("created_at")
                         .first()
                     )
-                    blacklist_token(oldest_token.token)  # Blacklist the oldest token
-                    oldest_token.delete()
-
+                BlacklistedToken.objects.create(token=oldest_token.refresh_token)
+                BlacklistedToken.objects.create(token=oldest_token.access_token)
                 refresh = RefreshToken.for_user(user)
+                access_token = str(refresh.access_token)
                 decoded_token = jwt.decode(
-                    str(refresh.access_token), settings.SECRET_KEY, algorithms=["HS256"]
+                    access_token, settings.SECRET_KEY, algorithms=["HS256"]
                 )
                 expiry_time = datetime.fromtimestamp(
                     decoded_token.get("exp"), timezone.utc
@@ -276,18 +264,19 @@ class VerifyOtpView(APIView):
 
                 UserToken.objects.create(
                     user=user,
-                    token=str(refresh.access_token),
+                    token=(access_token),
+                    access_token=(access_token),
+                    refresh_token=(refresh),
                     device_info=device_info,
                     expiry_time=expiry_time,
                 )
-                user.save()
 
                 return Response(
                     {
                         "message": "OTP verified",
                         "token": {
                             "refresh": str(refresh),
-                            "access": str(refresh.access_token),
+                            "access": access_token,
                         },
                     },
                     status=status.HTTP_200_OK,
@@ -310,45 +299,22 @@ class UserLogoutView(APIView):
                 {"message": "Authorization header missing or invalid."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        device_info = request.META.get("HTTP_USER_AGENT", "") + str(
+            request.data.get("screen_size")
+        )
+        userDevice = UserToken.objects.get(user=request.user, device_info=device_info)
+        userDevice.delete()
 
-        token = auth_header.split()[1]
-        user = request.user
-        refresh_token = UserToken.objects.get(refresh_token=request.data.get("refresh"))
+        refresh_token = request.data.get("token")
+        access_token = request.headers.get("Authorization")
+        if access_token and access_token.startswith("Bearer "):
+            access_token = access_token.split("Bearer ")[1]
         if refresh_token:
             BlacklistedToken.objects.create(token=refresh_token)
-            refresh_token.delete()
-
-        if not user.is_authenticated:
-            return Response(
-                {"message": "User is not authenticated."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-
-        try:
-            # Try to treat the token as a RefreshToken first
-            token_obj = RefreshToken(token)
-            token_obj.blacklist()
-        except TokenError:
-            # If the token is not a RefreshToken, it might be an AccessToken
-            try:
-                token_obj = AccessToken(token)
-                return Response(
-                    {"message": "Access token cannot be blacklisted."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            except TokenError:
-                return Response(
-                    {"message": "Invalid token type."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        user_token = UserToken.objects.filter(user=user).first()
-        if user_token:
-            user_token.delete()
-
+            BlacklistedToken.objects.create(token=access_token)
         return Response(
             {"message": "User logged out successfully."},
-            status=status.HTTP_204_NO_CONTENT,
+            status=status.HTTP_200_OK,
         )
 
 
