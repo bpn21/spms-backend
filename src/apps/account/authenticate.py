@@ -27,10 +27,6 @@ class CustomJWTAuthentication(JWTAuthentication):
             if isinstance(raw_token, bytes)
             else str(raw_token)
         )
-        if raw_token == access_token:
-            print("They are same")
-        else:
-            print("They are not same")
         if BlacklistedToken.objects.filter(token=raw_token_str).exists():
             raise AuthenticationFailed(
                 "Authentication credentials were not provided or are invalid."
