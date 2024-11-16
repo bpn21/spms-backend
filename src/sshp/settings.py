@@ -22,9 +22,6 @@ IMAGE_ROOT = os.path.join(BASE_DIR, "image")
 IMAGE_URL = "/image/"
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
-
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "django-insecure-fpp5=1w#wjbc@ebm1p)7bxcuxeh#j&wk^7lw^*fckblqn(1c46"
 
@@ -193,14 +190,14 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "uploads")
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_PORT = 587
-EMAIL_HOST_USER = "babalinvoice@gmail.com"
-EMAIL_HOST_PASSWORD = "cfda jcmn tkjo kegm"
-EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
+DEFAULT_AUTO_FIELD = os.environ.get("DEFAULT_AUTO_FIELD")
+EMAIL_BACKEND = os.environ.get("EMAIL_HOST")
+EMAIL_HOST = os.environ.get("EMAIL_HOST")
+EMAIL_PORT = os.environ.get("EMAIL_PORT")
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS")
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL")
 
 
 # At top its main domain, sub domain are listed below main domain.
